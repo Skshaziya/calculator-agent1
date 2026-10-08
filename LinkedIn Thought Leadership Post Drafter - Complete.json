@@ -1,0 +1,231 @@
+{
+  "name": "LinkedIn Thought Leadership Post Drafter - Complete",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "515cd613-8767-47c9-a2d9-2602d76185cb",
+      "name": "Start",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "project",
+              "name": "project_name",
+              "value": "LinkedIn Thought Leadership Post Drafter",
+              "type": "string"
+            },
+            {
+              "id": "audience",
+              "name": "target_audience",
+              "value": "Technology professionals, AI and Data Science professionals, founders, students and business leaders",
+              "type": "string"
+            },
+            {
+              "id": "voice",
+              "name": "voice",
+              "value": "Professional, insightful, practical, confident and human. Avoid corporate buzzwords.",
+              "type": "string"
+            },
+            {
+              "id": "bookmarks",
+              "name": "bookmarked_content",
+              "value": "BOOKMARK 1 — AI adoption: Many organizations are moving from AI experiments to production systems. The biggest challenge is not simply choosing a model; it is building reliable workflows, evaluating outputs, protecting data and creating measurable business value.\n\nBOOKMARK 2 — Responsible AI: Successful AI products need human oversight, clear evaluation criteria, transparent limitations and a process for handling incorrect or unsafe outputs. Trust is part of product quality.\n\nBOOKMARK 3 — Technology leadership: Strong technical leaders connect technology decisions to customer problems. Instead of discussing technology only in terms of features, they explain why a change matters, what trade-offs it creates and what teams should do next.",
+              "type": "string"
+            },
+            {
+              "id": "instructions",
+              "name": "content_instructions",
+              "value": "Create ONE original LinkedIn thought-leadership post using the bookmarks as inspiration. Do not claim personal experiences that are not provided. Do not copy source wording. The post should have a strong opening hook, one central insight, practical value, a clear point of view, and an engaging question. Keep it around 180–260 words. Use short paragraphs and LinkedIn-friendly spacing. Add 4–6 relevant hashtags.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4df02ec6-af76-4ee0-9f1c-4e781f11784d",
+      "name": "Project Inputs",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input=$json; const prompt=`You are a LinkedIn thought-leadership editor.\\n\\nPROJECT: ${input.project_name}\\nTARGET AUDIENCE: ${input.target_audience}\\nVOICE: ${input.voice}\\n\\nBOOKMARKED CONTENT:\\n${input.bookmarked_content}\\n\\nCONTENT REQUIREMENTS:\\n${input.content_instructions}\\n\\nReturn ONLY a JSON object with exactly these keys:\\n{\\n  \\\"title\\\": \\\"short internal title\\\",\\n  \\\"hook\\\": \\\"opening hook\\\",\\n  \\\"post\\\": \\\"complete LinkedIn post including the hook and final discussion question, but not the hashtags\\\",\\n  \\\"takeaway\\\": \\\"one-sentence practical takeaway\\\",\\n  \\\"question\\\": \\\"final discussion question\\\",\\n  \\\"hashtags\\\": [\\\"#AI\\\", \\\"#Technology\\\", \\\"#Leadership\\\", \\\"#DataScience\\\"]\\n}\\n\\nQuality rules: Make the writing original and natural. Avoid phrases such as 'In today\\'s fast-paced world', 'game-changer', 'revolutionary', 'unlock the power', and generic motivational filler. Do not fabricate statistics, company names, studies, personal achievements or facts that are not in the bookmarks.`; return [{json:{...input,prompt}}];"
+      },
+      "id": "62d195e6-9c49-425b-ae79-066596104981",
+      "name": "Build AI Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'openai/gpt-oss-120b', temperature: 0.7, max_completion_tokens: 1800, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: 'You create high-quality LinkedIn thought-leadership content. Follow the requested JSON schema exactly.' }, { role: 'user', content: $json.prompt } ] }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "f4948681-f948-487c-a9d2-e9706c8c00e9",
+      "name": "Groq - Generate Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "keghSxh1cL2fJ85C",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const response=$json; const raw=response?.choices?.[0]?.message?.content??''; if(!raw) throw new Error('Groq returned no message content. Check the Groq credential, model access, and API response.'); let draft; try{draft=JSON.parse(raw)}catch(e){const match=raw.match(/\\{[\\s\\S]*\\}/); if(!match) throw new Error('Groq returned text instead of valid JSON.'); draft=JSON.parse(match[0]);} const hashtags=Array.isArray(draft.hashtags)?draft.hashtags:[]; const cleanTags=hashtags.map(h=>String(h).trim()).filter(Boolean).map(h=>h.startsWith('#')?h:'#'+h.replace(/^#+/,'')); const post=String(draft.post||'').trim(); const question=String(draft.question||'').trim(); const takeaway=String(draft.takeaway||'').trim(); if(!post) throw new Error('The generated LinkedIn post is empty.'); const finalPost=(post+(takeaway?'\\n\\nKey takeaway: '+takeaway:'')+(question&&!post.endsWith(question)?'\\n\\n'+question:'')+(cleanTags.length?'\\n\\n'+cleanTags.join(' '):'')).trim(); return [{json:{project_name:'LinkedIn Thought Leadership Post Drafter',title:draft.title||'LinkedIn Thought Leadership Draft',hook:draft.hook||'',post,takeaway,question,hashtags:cleanTags,linkedin_post:finalPost,status:'READY',model:'openai/gpt-oss-120b'}}];"
+      },
+      "id": "104685b7-0f21-482e-97fd-7f33d49b33dc",
+      "name": "Validate & Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "output",
+              "name": "FINAL LINKEDIN POST",
+              "value": "={{$json.linkedin_post}}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "STATUS",
+              "value": "={{$json.status}}",
+              "type": "string"
+            },
+            {
+              "id": "title",
+              "name": "DRAFT TITLE",
+              "value": "={{$json.title}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5b0b7ae1-0a27-4166-806e-29a0403e296b",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1184,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Project Inputs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Inputs": {
+      "main": [
+        [
+          {
+            "node": "Build AI Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI Prompt": {
+      "main": [
+        [
+          {
+            "node": "Groq - Generate Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq - Generate Draft": {
+      "main": [
+        [
+          {
+            "node": "Validate & Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Format": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "666c76d0-5470-475f-90f8-4a7b5ae711c8",
+  "meta": {
+    "instanceId": "3f5b2a039cccedd24d04e15416b95d39fa54d07476eb61d832afc24bce5b93da"
+  },
+  "id": "IKKbopBIEdn1UfRn",
+  "tags": []
+}
